@@ -1,0 +1,29 @@
+name: mesh-healthcheck
+on:
+  schedule: [{cron: "17 */3 * * *"}]   # every 3h, off the round minutes
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check mesh status freshness
+        run: |
+          git config user.name mesh-bot; git config user.email mesh@local
+          stale=""
+          for f in status/*.json; do
+            ts=$(python3 -c "import json,datetime;d=json.load(open('$f'));print(d['ts'])")
+            age=$(( $(date +%s) - $(date -d "$ts" +%s) ))
+            echo "$f last seen ${age}s ago"
+            [ $age -gt 5400 ] && stale="$stale $(basename $f)"
+          done
+          echo "STALE=$stale" >> $GITHUB_ENV
+          date -u +%FT%TZ > healthcheck.txt
+          git add -A; git commit -m healthcheck --allow-empty; git pull --rebase --autostash; git push
+      - name: Alert via Telegram if a node is stale
+        if: env.STALE != ''
+        run: |
+          curl -s "https://api.telegram.org/bot${{ secrets.MESH_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.MESH_ADMIN }}" \
+            -d text="🔴 mesh alert: stale node(s) ${{ env.STALE }} (>90min no heartbeat)"

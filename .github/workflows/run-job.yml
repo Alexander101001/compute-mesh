@@ -1,0 +1,19 @@
+name: mesh-runner   # overflow compute: heavy jobs that don't fit on VMs
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "bash to run"
+        required: true
+        default: 'echo hello from GitHub Actions'
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - run: '${{ github.event.inputs.script }}'
+      - name: report
+        if: always()
+        run: |
+          curl -s "https://api.telegram.org/bot${{ secrets.MESH_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.MESH_ADMIN }}" \
+            -d text="⚡ GH Action job finished: ${{ job.status }} — ${{ github.run_id }}"
